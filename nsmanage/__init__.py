@@ -105,12 +105,12 @@ class SoftLayerInterface(object):
                 'mxPriority': record.priority}
 
     def _dict_to_record(self, d):
-        return Record(type=d['type'],
-                      host=d['host'],
-                      data=d['data'],
-                      ttl=d['ttl'],
-                      priority=d['mxPriority'],
-                      ref=d['id'])
+        return Record.create(type=d['type'],
+                             host=d['host'],
+                             data=d['data'],
+                             ttl=d['ttl'],
+                             priority=d['mxPriority'],
+                             ref=d['id'])
 
     @memoize
     def get_domains(self):
@@ -119,7 +119,8 @@ class SoftLayerInterface(object):
     @memoize
     def get_records(self, name):
         recs = self._get_domains_by_name()[name]['resourceRecords']
-        return [self._dict_to_record(rec) for rec in recs]
+        return [self._dict_to_record(rec) for rec in recs
+                if rec['type'] != 'soa']
 
     def _delete_record(self, name, record):
         rc = self._record_client(record.ref)
@@ -150,9 +151,10 @@ class SoftLayerInterface(object):
 
 class Manager(object):
 
-    def __init__(self, interface, verbose=False):
-        self.interface = interface
+    def __init__(self, provider, verbose=False):
         self.verbose = verbose
+        if provider == 'softlayer':
+            self.interface = SoftLayerInterface()
 
     @memoize
     def load_domain_config(self, name):
@@ -205,6 +207,7 @@ class Manager(object):
     def lint(self, name):
         "Check the configuration for this domain locally."
         domain = self.load_domain_config(name)
+        domain.add_softlayer_ns_records()
         return domain.to_records()
 
     def diff(self, name):
@@ -216,7 +219,6 @@ class Manager(object):
         """
         remote_recs = self.interface.get_records(name)
         self.sort_records(remote_recs)
-        remote_recs = [rec for rec in remote_recs if rec.type != 'soa']
 
         local_recs = self.lint(name)
         self.sort_records(local_recs)
@@ -276,6 +278,11 @@ def main():
     p = argparse.ArgumentParser(description='Manage DNS records.')
     p.add_argument('-v', '--verbose', dest='verbose', action='store_true',
                    help='print detailed output')
+    p.add_argument('-p', '--provider', dest='provider',
+                   type=str,
+                   default='softlayer',
+                   choices=('softlayer,'),
+                   help='DNS provider')
     p.add_argument('action', type=str,
                    help='action to perform',
                    choices=('lint', 'diff', 'push'))
@@ -287,17 +294,15 @@ def main():
                                  if args.domains else
                                  'all domains')
 
-    interface = SoftLayerInterface()
+    sys.path.insert(0, os.getcwd())
+
+    manager = Manager(provider=args.provider, verbose=args.verbose)
 
     if not args.domains:
-        args.domains = interface.get_domains()
+        args.domains = manager.interface.get_domains()
         all = True
     else:
         all = False
-
-    sys.path.insert(0, os.getcwd())
-
-    manager = Manager(interface, verbose=args.verbose)
 
     for name in args.domains:
         if all and args.verbose:

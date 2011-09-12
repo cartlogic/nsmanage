@@ -2,13 +2,6 @@ class Domain(object):
 
     def __init__(self, *records):
         self.records = list(records)
-        self.add_ns_records()
-
-    def to_records_normal(self):
-        """
-        Export this configuration in the form of a SoftLayer dict.
-        """
-        return [rec.to_dict() for rec in self.records]
 
     def to_records(self):
         """
@@ -24,16 +17,16 @@ class Domain(object):
 
         ret = []
         for rec in self.records:
-            d = Record(host=rec.host,
-                       data=rec.data,
-                       ttl=lowest_ttls[rec.host],
-                       type=rec.type,
-                       priority=rec.priority)
+            d = Record.create(host=rec.host,
+                              data=rec.data,
+                              ttl=lowest_ttls[rec.host],
+                              type=rec.type,
+                              priority=rec.priority)
             ret.append(d)
 
         return ret
 
-    def add_ns_records(self):
+    def add_softlayer_ns_records(self):
         self.records.extend([
             NS('@', 'ns1.softlayer.com.'),
             NS('@', 'ns2.softlayer.com.')
@@ -63,8 +56,16 @@ class Record(object):
         self.ttl = kwargs.get('ttl', self.default_ttl)
         self.priority = ''
         self.ref = kwargs.get('ref')
-        if 'type' in kwargs:
-            self.type = kwargs['type']
+
+    @staticmethod
+    def create(*args, **kwargs):
+        klass = {'ns': NS,
+                 'a': A,
+                 'aaaa': AAAA,
+                 'mx': MX,
+                 'cname': CNAME,
+                 'txt': TXT}[kwargs['type']]
+        return klass(*args, **kwargs)
 
     def match(self, other, level):
         return all(getattr(self, key) == getattr(other, key) for key in
