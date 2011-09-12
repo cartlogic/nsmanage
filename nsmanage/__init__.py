@@ -49,7 +49,8 @@ def memoize(f):
 
 class SoftLayerInterface(object):
 
-    def __init__(self):
+    def __init__(self, eager=False):
+        self.eager = eager
         config = ConfigParser()
         config.read(os.path.join(os.getenv('HOME'), '.softlayer'))
         self.api_username = config.get('auth', 'api_username')
@@ -70,16 +71,10 @@ class SoftLayerInterface(object):
                                 record_id)
 
     @memoize
-    def _get_domains_raw(self, all=True):
-        mask = {
-            'domains': {
-                'resourceRecords': {}
-            }
-        }
-
+    def _get_domains_raw(self):
         client = self._account_client()
-        if all:
-            client.set_object_mask(mask)
+        if self.eager or True:  # FIXME
+            client.set_object_mask({'domains': {'resourceRecords': {}}})
         resp = client.getObject()
         return resp['domains']
 
@@ -151,15 +146,12 @@ class SoftLayerInterface(object):
 
 class Manager(object):
 
-    def __init__(self, provider, verbose=False):
+    def __init__(self, interface, verbose=False):
+        self.interface = interface
         self.verbose = verbose
-        if provider == 'softlayer':
-            self.interface = SoftLayerInterface()
 
-    @memoize
     def load_domain_config(self, name):
-        name = name.lower().replace('.', '_')
-        mod_name = '%s' % name
+        mod_name = name.lower().replace('.', '_')
         __import__(mod_name)
         return sys.modules[mod_name].domain
 
@@ -296,13 +288,16 @@ def main():
 
     sys.path.insert(0, os.getcwd())
 
-    manager = Manager(provider=args.provider, verbose=args.verbose)
+    if args.provider == 'softlayer':
+        interface = SoftLayerInterface(eager=(not args.domains))
 
     if not args.domains:
-        args.domains = manager.interface.get_domains()
+        args.domains = interface.get_domains()
         all = True
     else:
         all = False
+
+    manager = Manager(interface, verbose=args.verbose)
 
     for name in args.domains:
         if all and args.verbose:
