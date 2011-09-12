@@ -13,3 +13,6 @@
 
 # Egg metadata.
 nsmanage.egg-info/
+
+# Test coverage data.
+cover/

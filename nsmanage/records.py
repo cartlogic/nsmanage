@@ -95,6 +95,7 @@ class NS(Record):
 
 class MX(Record):
     type = 'mx'
+    default_priority = 0
 
     def __init__(self, host, data, **kwargs):
         Record.__init__(self, host, data, **kwargs)
