@@ -1,5 +1,6 @@
 import sys
 import os.path
+from collections import defaultdict
 from unittest import TestCase
 
 from nsmanage import Manager, NS, A, AAAA, CNAME, MX, TXT, SPF
@@ -9,6 +10,9 @@ sys.path.insert(0, __here__)
 
 
 class TestInterface(object):
+
+    def __init__(self):
+        self.calls = defaultdict(list)
 
     def get_domains(self):
         return ['foo.com', 'bar.com']
@@ -26,17 +30,24 @@ class TestInterface(object):
                             CNAME('www', '@')]}[name]
 
     def delete_records(self, name, records):
+        self.calls['delete'].append((name, records))
         return True
 
     def create_records(self, name, records):
+        self.calls['create'].append((name, records))
         return True
 
     def update_records(self, name, changelist):
+        self.calls['update'].append((name, changelist))
         return True
 
 
-class TestRecord(TestCase):
+class TestApp(TestCase):
 
-    def test_app(self):
-        manager = Manager(TestInterface())
+    def test_push(self):
+        interface = TestInterface()
+        manager = Manager(interface)
         manager.push('foo.com')
+
+        self.assertEqual(len(interface.calls['create']), 1)
+        self.assertEqual(len(interface.calls['update']), 1)
