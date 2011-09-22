@@ -48,7 +48,7 @@ class Domain(object):
 class Record(object):
     default_ttl = 86400
     default_priority = ''
-    fields = ('priority', 'ttl', 'data', 'type', 'host')
+    fields = ('priority', 'ttl', 'data', 'host', 'type')
 
     def __init__(self, host, data, **kwargs):
         self.data = data
