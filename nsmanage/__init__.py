@@ -123,12 +123,6 @@ class Manager(object):
         # Get the unsynced differences via diff().
         added, removed, changed = self.diff(name)
 
-        for rec in added:
-            if self.verbose:
-                print "ADDING\n%s" % rec
-        if not self.interface.create_records(name, added):
-            print "Failed adding records."
-
         for rec in removed:
             if self.verbose:
                 print "REMOVING\n%s" % rec
@@ -140,6 +134,12 @@ class Manager(object):
                 print "UPDATING\n%s\nto\%s" % (oldrec, newrec)
         if not self.interface.update_records(name, changed):
             print "Failed updating records."
+
+        for rec in added:
+            if self.verbose:
+                print "ADDING\n%s" % rec
+        if not self.interface.create_records(name, added):
+            print "Failed adding records."
 
 
 def main():
