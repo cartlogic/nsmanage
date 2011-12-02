@@ -48,7 +48,8 @@ class Domain(object):
 class Record(object):
     default_ttl = 86400
     default_priority = ''
-    fields = ('priority', 'ttl', 'data', 'host', 'type')
+    fields = ('priority', 'ttl', 'data', 'host')
+    num_levels = 4
 
     def __init__(self, host, data, **kwargs):
         self.data = data
@@ -68,8 +69,9 @@ class Record(object):
         return klass(*args, **kwargs)
 
     def match(self, other, level):
-        return all(getattr(self, key) == getattr(other, key) for key in
-                   self.fields[level:])
+        return (self.type == other.type and
+                all(getattr(self, key) == getattr(other, key) for key in
+                    self.fields[level:]))
 
     def diff(self, other, level):
         ret = {}
@@ -87,6 +89,9 @@ class Record(object):
              'data': self.data,
              'type': rectype.ljust(6)}
         return "%(host)s %(ttl)s IN %(type)s %(data)s" % d
+
+    def __repr__(self):
+        return '<%s %s>' % (self.__class__.__name__, str(self))
 
 
 class NS(Record):

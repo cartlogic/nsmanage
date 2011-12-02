@@ -62,7 +62,7 @@ class Manager(object):
         for newrec in new:
             # Try to find a matching old record, using gradually decreasing
             # specificity.
-            for level in range(5):
+            for level in range(Record.num_levels):
                 if find_match(newrec, level):
                     break
             else:
@@ -149,7 +149,7 @@ def main():
     p.add_argument('-p', '--provider', dest='provider',
                    type=str,
                    default='softlayer',
-                   choices=('softlayer,'),
+                   choices=('softlayer',),
                    help='DNS provider')
     p.add_argument('action', type=str,
                    help='action to perform',
