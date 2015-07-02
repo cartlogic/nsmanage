@@ -3,6 +3,7 @@ import os.path
 import functools
 from ConfigParser import ConfigParser
 from SoftLayer.API import Client
+from SoftLayer.managers.dns import DNSManager
 
 from .records import Record
 
@@ -37,26 +38,19 @@ class SoftLayerInterface(object):
         self.api_username = config.get('auth', 'api_username')
         self.api_key = config.get('auth', 'api_key')
 
-    def _api_client(self, type, id):
-        return Client(type, id, self.api_username, self.api_key)
+    @property
+    @memoize
+    def client(self):
+        return Client(username=self.api_username, api_key=self.api_key)
 
-    def _account_client(self):
-        return self._api_client('SoftLayer_Account', None)
-
-    def _domain_client(self, name):
-        domain_id = self._get_domains_map()[name]
-        return self._api_client('SoftLayer_Dns_Domain', domain_id)
-
-    def _record_client(self, record_id):
-        return self._api_client('SoftLayer_Dns_Domain_ResourceRecord',
-                                record_id)
+    @property
+    @memoize
+    def dns(self):
+        return DNSManager(self.client)
 
     @memoize
     def _get_domains_raw(self):
-        client = self._account_client()
-        client.set_object_mask({'domains': {'resourceRecords': {}}})
-        resp = client.getObject()
-        return resp['domains']
+        return self.dns.list_zones()
 
     @memoize
     def _get_domains_map(self):
@@ -93,25 +87,36 @@ class SoftLayerInterface(object):
 
     @memoize
     def get_records(self, name):
-        recs = self._get_domains_by_name()[name]['resourceRecords']
+        try:
+            domain = self._get_domains_by_name()[name]
+        except KeyError:
+            return []
+        recs = self.dns.get_records(domain['id'])
         return [self._dict_to_record(rec) for rec in recs
                 if rec['type'] != 'soa']
 
     def _delete_record(self, name, record):
-        rc = self._record_client(record.ref)
-        return rc.deleteObject()
+        # self.dns.delete_record fails to return a success indicator, so bypass it.
+        return self.dns.record.deleteObject(id=record.ref)
 
     def _update_record(self, name, old_record, new_record):
-        rc = self._record_client(old_record.ref)
-        return rc.editObject(self._record_to_dict(new_record))
+        # self.dns.edit_record fails to return a success indicator, so bypass it.
+        return self.dns.record.editObject(
+            self._record_to_dict(new_record), id=old_record.ref)
 
     def _create_record(self, name, record):
-        dc = self._domain_client(name)
-        method = 'create%sRecord' % record.type.capitalize()
-        args = [record.host, record.data, record.ttl]
+        # self.dns.create_record doesn't support mxPriority, so bypass it.
+        domain_id = self._get_domains_by_name()[name]['id']
+        obj = {
+            'domainId': domain_id,
+            'ttl': record.ttl,
+            'host': record.host,
+            'type': record.type,
+            'data': record.data,
+        }
         if record.type == 'mx':
-            args.append(record.priority)
-        return getattr(dc, method)(*args)
+            obj['mxPriority'] = record.priority
+        return self.dns.record.createObject(obj)
 
     def delete_records(self, name, records):
         return all(self._delete_record(name, record) for record in records)
@@ -123,4 +128,9 @@ class SoftLayerInterface(object):
     def create_records(self, name, records):
         return all(self._create_record(name, record) for record in records)
 
+    def create_domain(self, name):
+        ret = self.dns.create_zone(name)
+        # un-memoize so we can fetch the new domain's info after this.
+        self._get_domains_raw(self).cache = {}
+        return ret
 

@@ -87,31 +87,44 @@ class Manager(object):
         """
         remote_recs = self.interface.get_records(name)
         self.sort_records(remote_recs)
+        lines = []
 
-        local_recs = self.lint(name)
+        try:
+            local_recs = self.lint(name)
+        except ImportError:
+            lines.append("*** DOMAIN DOES NOT EXIST LOCALLY: %s ***" % name)
+            local_recs = []
+
         self.sort_records(local_recs)
 
         added, removed, changed = self.diff_record_lists(remote_recs,
                                                          local_recs)
 
+        if name not in self.interface.get_domains():
+            lines.append("*** CREATE DOMAIN: %s ***" % name)
+
         if added:
-            print "*** RECORDS ADDED ***"
+            lines.append("*** RECORDS ADDED ***")
         for rec in added:
-            print "+++ %s" % rec
+            lines.append("+++ %s" % rec)
 
         if removed:
-            print "*** RECORDS REMOVED ***"
+            lines.append("*** RECORDS REMOVED ***")
         for rec in removed:
-            print "--- %s" % rec
+            lines.append("--- %s" % rec)
 
         if changed:
-            print "*** RECORDS CHANGED ***"
+            lines.append("*** RECORDS CHANGED ***")
         for oldrec, newrec in changed:
-            print "--- %s" % oldrec
-            print "+++ %s" % newrec
+            lines.append("--- %s" % oldrec)
+            lines.append("+++ %s" % newrec)
 
         if self.verbose and not (added or removed or changed):
-            print "No differences, live state and config state are in sync."
+            lines.append("No differences, live state and config state are in sync.")
+
+        if lines:
+            print "*** DIFF FOR DOMAIN: %s ***" % name
+            sys.stdout.writelines("  "+l+"\n" for l in lines)
 
         return added, removed, changed
 
@@ -120,6 +133,12 @@ class Manager(object):
         Push the local configuration for this domain to the remote host.
         Implicitly runs a lint() and a diff() on this domain.
         """
+
+        if name not in self.interface.get_domains():
+            if self.verbose:
+                print "CREATING DOMAIN\n%s" % name
+            self.interface.create_domain(name)
+
         # Get the unsynced differences via diff().
         added, removed, changed = self.diff(name)
 
